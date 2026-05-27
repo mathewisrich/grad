@@ -118,18 +118,21 @@ export default function PasswordGate() {
               allTranscripts.push(res[j].transcript.trim());
             }
           }
-          console.log("Transcripts heard:", allTranscripts);
+          // never log raw transcript — could leak the password
 
+          // Generic feedback only — never echo what was heard, since
+          // even near-misses ("addy", "dady", "dad") spoil the answer.
           const latest = allTranscripts[allTranscripts.length - 1];
           if (latest) {
-            setSpeechFeedback(`Heard: "${latest}" 👂`);
+            setSpeechFeedback("Listening... keep going 👂");
           }
 
           if (looksLikeDaddy(allTranscripts)) {
             matchedRef.current = true;
             userStoppedRef.current = true;
             setSpeechFeedback("Recognized! Logging in... 🎉");
-            setValue("daddy");
+            // Intentionally do NOT call setValue(...) — the password must
+            // never appear in the visible input field.
             try {
               recognition.abort();
             } catch {}
