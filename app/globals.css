@@ -13,64 +13,158 @@
 
 html,
 body {
-  background: #0a0a0a;
-  color: #f7f3ec;
+  background: #08060d;
+  color: #ffffff;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-body.no-scroll {
+/* --- Moving colorful background gradient with deep pink, neon yellow, and clean white highlights --- */
+.vibrant-bg {
+  background: linear-gradient(135deg, #05040a 0%, #120512 50%, #000000 100%);
+  position: relative;
   overflow: hidden;
 }
 
-/* --- noise / grain overlay for richer dark backgrounds ---------------- */
-.grain::before {
+.vibrant-bg::before {
   content: "";
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: 
+    radial-gradient(circle at 15% 25%, rgba(255, 0, 127, 0.22) 0%, transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(234, 255, 0, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 50% 85%, rgba(255, 255, 255, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 75% 85%, rgba(255, 0, 127, 0.15) 0%, transparent 40%);
+  filter: blur(80px);
+  z-index: 0;
   pointer-events: none;
-  z-index: 1;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: bg-drift 22s ease-in-out infinite alternate;
 }
 
-/* --- thin scrollbar in dark theme ------------------------------------ */
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-*::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* --- selection check circle ------------------------------------------ */
-.pick-check {
-  @apply absolute top-2 left-2 h-7 w-7 rounded-full border-2 border-white/70 bg-black/40 backdrop-blur-sm flex items-center justify-center text-white text-sm font-bold transition-all duration-200;
-  transform: translateZ(0);
-}
-.pick-check.on {
-  @apply bg-gold border-gold text-ink;
-  box-shadow: 0 0 0 4px rgba(201, 162, 74, 0.18);
-}
-.pick-check:active {
-  transform: scale(0.92);
+@keyframes bg-drift {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.08);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
 }
 
-/* --- nice button base ------------------------------------------------ */
+/* --- Neon glowing borders and colorful utilities --- */
+.neon-glow-pink {
+  box-shadow: 0 0 20px rgba(255, 0, 127, 0.3), inset 0 0 10px rgba(255, 0, 127, 0.1);
+  border-color: rgba(255, 0, 127, 0.55);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 20px rgba(234, 255, 0, 0.15), inset 0 0 10px rgba(234, 255, 0, 0.05);
+  border-color: rgba(234, 255, 0, 0.35);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.15), inset 0 0 10px rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.text-gradient-candy {
+  background: linear-gradient(135deg, #ffffff, #ff007f, #eaff00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-sunset {
+  background: linear-gradient(135deg, #ff007f, #eaff00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-neon {
+  background: linear-gradient(135deg, #ffffff, #eaff00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Animated rainbow gradient title -------------------------------- */
+.text-gradient-animated {
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #ff007f 25%,
+    #eaff00 50%,
+    #ff007f 75%,
+    #ffffff 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-slide 3.5s linear infinite, title-pop 2.4s ease-in-out infinite;
+  display: inline-block;
+  text-shadow: 0 0 40px rgba(255, 0, 127, 0.25);
+}
+
+@keyframes gradient-slide {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes title-pop {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.04) rotate(-1deg);
+  }
+  50% {
+    transform: scale(1.08) rotate(0deg);
+  }
+  75% {
+    transform: scale(1.04) rotate(1deg);
+  }
+}
+
+.paw-wiggle {
+  display: inline-block;
+  animation: paw-wave 1.2s ease-in-out infinite;
+  transform-origin: 70% 70%;
+}
+
+.paw-wiggle.delay {
+  animation-delay: 0.25s;
+}
+
+@keyframes paw-wave {
+  0%, 100% {
+    transform: rotate(-12deg) scale(1);
+  }
+  50% {
+    transform: rotate(18deg) scale(1.15);
+  }
+}
+
+/* --- nice button base with gradients ---------------------------------- */
 .btn-primary {
-  @apply px-5 py-3 rounded-2xl bg-gold text-ink font-bold uppercase tracking-wider text-sm sm:text-base transition;
-  box-shadow: 0 8px 20px -8px rgba(201, 162, 74, 0.6);
+  @apply px-5 py-3 rounded-2xl bg-gradient-to-r from-pink-500 via-pink-600 to-yellow-400 text-black font-extrabold uppercase tracking-wider text-sm sm:text-base transition-all duration-300;
+  box-shadow: 0 8px 25px -5px rgba(255, 0, 127, 0.55);
 }
 .btn-primary:hover {
-  filter: brightness(1.08);
+  @apply from-pink-400 via-pink-500 to-yellow-300 scale-[1.02];
+  box-shadow: 0 12px 30px -3px rgba(255, 0, 127, 0.65);
 }
 .btn-primary:active {
-  transform: scale(0.98);
+  @apply scale-[0.98];
 }
 .btn-primary:disabled {
   opacity: 0.35;
@@ -80,13 +174,14 @@ body.no-scroll {
 }
 
 .btn-ghost {
-  @apply px-5 py-3 rounded-2xl border-2 border-gold/70 text-gold font-bold uppercase tracking-wider text-sm sm:text-base transition;
+  @apply px-5 py-3 rounded-2xl border-2 border-yellow-400/70 text-yellow-300 font-extrabold uppercase tracking-wider text-sm sm:text-base transition-all duration-300 bg-yellow-950/20;
 }
 .btn-ghost:hover {
-  @apply bg-gold/10 border-gold;
+  @apply bg-yellow-400/10 border-yellow-400 text-yellow-200 scale-[1.02];
+  box-shadow: 0 0 15px rgba(234, 255, 0, 0.3);
 }
 .btn-ghost:active {
-  transform: scale(0.98);
+  @apply scale-[0.98];
 }
 .btn-ghost:disabled {
   opacity: 0.3;
@@ -124,12 +219,12 @@ body.no-scroll {
   @apply h-1.5 w-full rounded-full bg-white/10 overflow-hidden;
 }
 .bar > span {
-  @apply block h-full bg-gold transition-all duration-200;
+  @apply block h-full bg-gradient-to-r from-pink-500 to-cyan-400 transition-all duration-200;
 }
 
 /* --- focus ring ------------------------------------------------------ */
 :where(a, button, input, [tabindex]):focus-visible {
-  outline: 2px solid #c9a24a;
+  outline: 2px solid #ec4899;
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -141,4 +236,17 @@ body.no-scroll {
   select {
     font-size: 16px;
   }
+}
+
+/* --- selection check circle ------------------------------------------ */
+.pick-check {
+  @apply absolute top-2 left-2 h-7 w-7 rounded-full border-2 border-white/70 bg-black/45 backdrop-blur-sm flex items-center justify-center text-white text-sm font-bold transition-all duration-200;
+  transform: translateZ(0);
+}
+.pick-check.on {
+  @apply bg-pink-500 border-pink-500 text-white;
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.6);
+}
+.pick-check:active {
+  transform: scale(0.92);
 }

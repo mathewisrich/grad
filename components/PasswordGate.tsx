@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 const HINTS = [
-  "Hint: think about who really runs this town.",
-  "Hint: a term of endearment.",
-  "Hint: ask Kelly, he knows.",
-  "Hint: starts with the letter M.",
+  "Hint: Mathew is my d____. 🐶",
+  "Hint: Starts with 'd' and ends with 'y'.",
+  "Hint: roof roof roof! Who is your daddy? 🐶🐾",
+  "Hint: Just type 'daddy' bro!",
 ];
 
 export default function PasswordGate() {
@@ -15,7 +16,155 @@ export default function PasswordGate() {
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const [isListening, setIsListening] = useState(false);
+  const [speechFeedback, setSpeechFeedback] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(false);
   const router = useRouter();
+  const recognitionRef = useRef<any>(null);
+  const matchedRef = useRef<boolean>(false);
+  const userStoppedRef = useRef<boolean>(false);
+
+  // Returns true if any of the transcripts sounds like "daddy"
+  function looksLikeDaddy(transcripts: string[]): boolean {
+    const targets = [
+      "daddy",
+      "dady",
+      "dadi",
+      "daddie",
+      "daddies",
+      "daddi",
+      "dad",
+      "dadda",
+      "dada",
+      "deddy",
+      "doddy",
+      "ddady",
+      "addy",
+      "dude",
+      "deddi",
+      "daty",
+      "dadi",
+      "dati",
+      "diddy",
+      "dadd",
+    ];
+    for (const raw of transcripts) {
+      const text = raw.toLowerCase().replace(/[^a-z]/g, " ");
+      const words = text.split(/\s+/).filter(Boolean);
+      for (const w of words) {
+        if (targets.includes(w)) return true;
+        // Loose check: word starts with "d" + vowel + "d" pattern
+        if (/^d[aeiou]d/.test(w)) return true;
+        // Or contains "dad" as a substring
+        if (w.includes("dad")) return true;
+      }
+      // Full-string contains check
+      if (text.includes("daddy") || text.includes("dady")) return true;
+    }
+    return false;
+  }
+
+  // Initialize Speech Recognition on client mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setIsSupported(true);
+        const recognition = new SpeechRecognition();
+        // Continuous + interim = grab partial transcripts the moment they come in
+        recognition.continuous = true;
+        recognition.lang = "en-US";
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 5;
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setSpeechFeedback("Listening... say 'daddy' 🎙️");
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          if (event.error === "not-allowed") {
+            setIsListening(false);
+            setSpeechFeedback("Microphone permission denied 🚫");
+          } else if (event.error === "no-speech") {
+            // Don't stop - let it auto-restart on end
+            setSpeechFeedback("Didn't hear anything yet... 👂");
+          } else if (event.error === "aborted") {
+            // user stopped, ignore
+          } else {
+            setSpeechFeedback(`Hmm: ${event.error}. Trying again...`);
+          }
+        };
+
+        recognition.onend = () => {
+          // Auto-restart unless we matched the word or the user stopped manually
+          if (!matchedRef.current && !userStoppedRef.current) {
+            try {
+              recognition.start();
+              return;
+            } catch (e) {
+              console.warn("Restart failed", e);
+            }
+          }
+          setIsListening(false);
+        };
+
+        recognition.onresult = (event: any) => {
+          const allTranscripts: string[] = [];
+          for (let i = 0; i < event.results.length; i++) {
+            const res = event.results[i];
+            for (let j = 0; j < res.length; j++) {
+              allTranscripts.push(res[j].transcript.trim());
+            }
+          }
+          console.log("Transcripts heard:", allTranscripts);
+
+          // Show what we're hearing live
+          const latest = allTranscripts[allTranscripts.length - 1];
+          if (latest) {
+            setSpeechFeedback(`Heard: "${latest}" 👂`);
+          }
+
+          if (looksLikeDaddy(allTranscripts)) {
+            matchedRef.current = true;
+            userStoppedRef.current = true;
+            setSpeechFeedback("Recognized! Logging in... 🎉");
+            setValue("daddy");
+            try {
+              recognition.stop();
+            } catch {}
+            triggerAutoLogin("daddy");
+          }
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+    };
+  }, []);
+
+  function triggerAutoLogin(passwordToUse: string) {
+    startTransition(async () => {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: passwordToUse }),
+      });
+      if (res.ok) {
+        router.push("/landing");
+      } else {
+        setAttempts((a) => a + 1);
+        setError("baby boy you forgot who i am to you");
+        setValue("");
+      }
+    });
+  }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,66 +179,120 @@ export default function PasswordGate() {
       if (res.ok) {
         router.push("/landing");
       } else {
-        const next = attempts + 1;
-        setAttempts(next);
-        setError(
-          next === 1
-            ? "Nope. Try again."
-            : next < 3
-              ? "Still no. Think harder."
-              : "Bro you really don't know who Mathew is??"
-        );
+        setAttempts((a) => a + 1);
+        setError("baby boy you forgot who i am to you");
         setValue("");
       }
     });
   }
 
+  function toggleListening() {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      userStoppedRef.current = true;
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    } else {
+      matchedRef.current = false;
+      userStoppedRef.current = false;
+      setSpeechFeedback("Get ready...");
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
   const hint = HINTS[Math.min(attempts, HINTS.length - 1)];
 
   return (
-    <main className="min-h-screen grain flex items-center justify-center px-5 py-16 relative">
+    <main className="min-h-screen vibrant-bg flex items-center justify-center px-4 sm:px-5 py-8 sm:py-16 relative">
       <div className="w-full max-w-lg relative z-10">
-        <div className="text-center mb-10 animate-fade-in">
-          <p className="text-[11px] uppercase tracking-[0.4em] text-gold mb-3">
-            Private · Invite Only
-          </p>
-          <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight">
-            Before you can see them,
-            <br />
-            <span className="text-gold">answer this:</span>
+        <div className="text-center mb-5 sm:mb-6 animate-fade-in">
+          <h1 className="text-3xl xs:text-4xl sm:text-5xl font-black leading-tight tracking-tight">
+            <span className="text-gradient-animated">Who is a good boy!</span>{" "}
+            <span className="paw-wiggle">🐾</span>
+            <span className="paw-wiggle delay">🐾</span>
           </h1>
+          <p className="mt-2 text-xs xs:text-sm sm:text-base text-pink-400 font-bold max-w-md mx-auto animate-pulse px-2">
+            look at you being a good boy Kelly roof roof rooof 🐶🐾🐕
+          </p>
+        </div>
+
+        {/* Dynamic Meme Picture based on password attempts */}
+        <div className="mb-6 sm:mb-8 flex flex-col items-center justify-center animate-fade-in">
+          {attempts === 0 ? (
+            <>
+              <div className="relative w-32 h-32 xs:w-40 xs:h-40 sm:w-44 sm:h-44 rounded-full overflow-hidden border-4 border-yellow-400 shadow-2xl neon-glow-pink">
+                <Image
+                  src="/dog-meme.png"
+                  alt="Good Boy Kelly"
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <p className="mt-3 sm:mt-4 text-lg xs:text-xl sm:text-2xl font-black uppercase tracking-wider text-gradient-sunset select-none animate-bounce text-center px-2">
+                &ldquo;am talm bout innnnnit&rdquo;
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="relative w-32 h-32 xs:w-40 xs:h-40 sm:w-44 sm:h-44 rounded-full overflow-hidden border-4 border-pink-500 shadow-2xl neon-glow-pink animate-wiggle">
+                <Image
+                  src="/wrong-meme.png"
+                  alt="Suspicious Side Eye Dog"
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <div className="text-center mt-3 sm:mt-4 px-2">
+                <p className="text-base xs:text-xl sm:text-2xl font-black uppercase tracking-wider text-pink-500 animate-pulse leading-snug">
+                  &ldquo;baby boy you forgot who i am to you&rdquo;
+                </p>
+                <p className="text-sm xs:text-base sm:text-lg font-black uppercase tracking-widest text-yellow-300 mt-1 scale-105">
+                  say it louder. 📢
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         <form
           onSubmit={submit}
-          className="bg-white/[0.04] border border-white/10 rounded-3xl p-7 sm:p-9 shadow-2xl backdrop-blur-xl animate-slide-up"
+          className="bg-black/85 border border-pink-500/40 rounded-3xl p-5 xs:p-7 sm:p-9 shadow-2xl backdrop-blur-xl animate-slide-up neon-glow-pink"
         >
-          <label className="block text-xs uppercase tracking-[0.25em] text-cream/50 mb-3">
-            Question
+          <label className="block text-[10px] xs:text-xs uppercase tracking-[0.25em] text-yellow-400 font-extrabold mb-2 sm:mb-3">
+            Prove your identity
           </label>
-          <p className="text-2xl sm:text-3xl font-bold mb-7 leading-snug">
-            Who is Mathew? Mathew is my{" "}
-            <span className="text-gold">__________</span>
+          <p className="text-2xl xs:text-3xl sm:text-4xl font-black mb-2 sm:mb-3 leading-snug text-gradient-candy">
+            Who am I to you?
+          </p>
+          <p className="text-xs sm:text-sm text-white/70 font-semibold mb-5 sm:mb-7">
+            You can either <span className="text-yellow-400">type it</span> or{" "}
+            <span className="text-pink-400">say it louder</span>. 📢
           </p>
 
           <label
             htmlFor="answer"
-            className="block text-xs uppercase tracking-[0.25em] text-cream/50 mb-2"
+            className="block text-xs uppercase tracking-[0.25em] text-pink-400 font-bold mb-2"
           >
             Your answer
           </label>
           <input
             id="answer"
             type="text"
-            autoFocus
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="type it..."
-            className="w-full px-4 py-4 text-lg bg-black/40 border border-white/15 rounded-2xl focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/40 transition placeholder-white/25"
+            placeholder="d-----y"
+            className="w-full px-4 py-4 text-lg bg-zinc-950 border border-pink-500/30 rounded-2xl focus:outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/20 text-white font-semibold transition placeholder-white/20 shadow-inner"
             aria-invalid={!!error}
             aria-describedby={error ? "answer-error" : undefined}
           />
@@ -97,24 +300,63 @@ export default function PasswordGate() {
           {error && (
             <p
               id="answer-error"
-              className="mt-3 text-sm text-red-400 animate-fade-in"
+              className="mt-3 text-sm text-pink-400 font-extrabold animate-fade-in"
             >
               {error}
             </p>
           )}
 
+          {/* Voice detector UI */}
+          {isSupported && (
+            <div className="mt-6 p-4 rounded-2xl bg-zinc-900/60 border border-yellow-400/20 flex flex-col items-center justify-center">
+              <p className="text-xs text-white/50 uppercase tracking-widest font-black mb-3">
+                🎙️ Lil boy voice dihtector
+              </p>
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`h-16 w-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isListening
+                    ? "bg-red-500 text-white animate-ping scale-110 shadow-lg shadow-red-500/50"
+                    : "bg-yellow-400 text-black hover:bg-yellow-300 hover:scale-105 active:scale-95 shadow-md"
+                }`}
+                title="Click to speak password"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                  stroke="currentColor"
+                  className="w-7 h-7"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
+              {speechFeedback && (
+                <p className="mt-3 text-xs text-yellow-300 font-extrabold animate-pulse text-center">
+                  {speechFeedback}
+                </p>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isPending || !value.trim()}
-            className="btn-primary mt-6 w-full text-lg"
+            className="btn-primary mt-6 w-full text-lg shadow-lg"
           >
-            {isPending ? "Checking..." : "Enter"}
+            {isPending ? "Checking..." : "Enter 🐶"}
           </button>
 
-          <p className="text-xs text-cream/40 text-center mt-5">{hint}</p>
+          <p className="text-xs text-yellow-400/95 font-bold text-center mt-5">{hint}</p>
         </form>
 
-        <p className="text-center text-[10px] uppercase tracking-[0.3em] text-cream/30 mt-10">
+        <p className="text-center text-[10px] uppercase tracking-[0.3em] text-white/30 mt-10">
           © Kelly & Mathew · Graduation 2026
         </p>
       </div>

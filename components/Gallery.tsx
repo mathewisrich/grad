@@ -30,6 +30,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
   const [sort, setSort] = useState<SortMode>("name-asc");
   const [filter, setFilter] = useState<ViewFilter>("all");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [slideshowMode, setSlideshowMode] = useState(false);
   const [progress, setProgress] = useState<ZipProgress | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,6 +105,15 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
     window.location.href = "/";
   }
 
+  function handleStartSlideshow() {
+    // If user has selected photos, slideshow plays only those; otherwise plays all
+    if (selected.size > 0 && filter !== "selected") {
+      setFilter("selected");
+    }
+    setSlideshowMode(true);
+    setLightboxIndex(0);
+  }
+
   // --- keyboard ------------------------------------------------------
 
   useEffect(() => {
@@ -129,7 +139,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
   // --- render --------------------------------------------------------
 
   return (
-    <main className="min-h-screen pb-44">
+    <main className="min-h-screen pb-44 vibrant-bg">
       <Header
         total={photos.length}
         visibleCount={visible.length}
@@ -175,13 +185,13 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
 
       <ActionBar
         selectedCount={selected.size}
-        totalCount=
-          {photos.length}
+        totalCount={photos.length}
         progress={progress}
         busy={busy}
         compact={isSmall}
         onDownloadSelected={handleDownloadSelected}
         onDownloadAll={handleDownloadAll}
+        onStartSlideshow={handleStartSlideshow}
       />
 
       {lightboxIndex !== null && visible[lightboxIndex] && (
@@ -191,7 +201,19 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
           total={visible.length}
           isSelected={selected.has(visible[lightboxIndex].name)}
           isDownloaded={downloaded.has(visible[lightboxIndex].name)}
-          onClose={() => setLightboxIndex(null)}
+          startInSlideshow={slideshowMode}
+          preloadUrls={[
+            // next 3 (so slideshow + arrow nav both feel instant)
+            visible[lightboxIndex + 1]?.full,
+            visible[lightboxIndex + 2]?.full,
+            visible[lightboxIndex + 3]?.full,
+            // previous 1
+            visible[lightboxIndex - 1]?.full,
+          ].filter((u): u is string => Boolean(u))}
+          onClose={() => {
+            setLightboxIndex(null);
+            setSlideshowMode(false);
+          }}
           onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
           onNext={() =>
             setLightboxIndex((i) =>
@@ -238,26 +260,26 @@ function Header({
   onLogout,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-30 backdrop-blur-xl bg-ink/85 border-b border-white/10">
+    <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/85 border-b border-pink-500/10">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           <Link
             href="/landing"
-            className="text-xs uppercase tracking-widest text-cream/60 hover:text-gold transition shrink-0"
+            className="text-xs uppercase tracking-widest text-pink-400 hover:text-pink-300 font-extrabold transition shrink-0"
           >
-            ←
+            ← Back
           </Link>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm sm:text-base font-bold truncate">
               {visibleCount} of {total}{" "}
-              <span className="text-cream/40 font-normal">·</span>{" "}
-              <span className="text-gold">{selectedCount}</span> selected
+              <span className="text-white/30 font-normal">·</span>{" "}
+              <span className="text-gradient-candy font-extrabold">{selectedCount}</span> selected
               {downloadedCount > 0 && (
                 <>
                   {" "}
-                  <span className="text-cream/40 font-normal">·</span>{" "}
-                  <span className="text-cream/60 font-normal">
-                    {downloadedCount} downloaded
+                  <span className="text-white/30 font-normal">·</span>{" "}
+                  <span className="text-yellow-400 font-bold">
+                    {downloadedCount} saved 💾
                   </span>
                 </>
               )}
@@ -269,12 +291,12 @@ function Header({
             onChange={(e: ChangeEvent<HTMLSelectElement>) =>
               onFilterChange(e.target.value as ViewFilter)
             }
-            className="bg-white/5 border border-white/15 rounded-full px-3 py-1.5 text-xs uppercase tracking-wider hover:border-gold transition cursor-pointer"
+            className="bg-pink-950/20 border border-pink-500/25 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:border-pink-400 text-pink-300 transition cursor-pointer outline-none focus:ring-2 focus:ring-pink-500/40"
             aria-label="Filter photos"
           >
-            <option value="all">All</option>
-            <option value="selected">Selected</option>
-            <option value="undownloaded">Not downloaded</option>
+            <option value="all" className="bg-black text-white">All</option>
+            <option value="selected" className="bg-black text-white">Selected</option>
+            <option value="undownloaded" className="bg-black text-white">Not downloaded</option>
           </select>
 
           <select
@@ -282,17 +304,17 @@ function Header({
             onChange={(e: ChangeEvent<HTMLSelectElement>) =>
               onSortChange(e.target.value as SortMode)
             }
-            className="hidden sm:block bg-white/5 border border-white/15 rounded-full px-3 py-1.5 text-xs uppercase tracking-wider hover:border-gold transition cursor-pointer"
+            className="hidden sm:block bg-yellow-950/20 border border-yellow-500/25 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:border-yellow-400 text-yellow-300 transition cursor-pointer outline-none focus:ring-2 focus:ring-yellow-500/40"
             aria-label="Sort order"
           >
-            <option value="name-asc">A → Z</option>
-            <option value="name-desc">Z → A</option>
+            <option value="name-asc" className="bg-black text-white">A → Z</option>
+            <option value="name-desc" className="bg-black text-white">Z → A</option>
           </select>
 
           {selectedCount > 0 ? (
             <button
               onClick={onClear}
-              className="px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-red-400 hover:text-red-400 transition"
+              className="px-3 py-1.5 text-xs uppercase tracking-wider font-extrabold rounded-full border border-red-500/30 hover:border-red-400 hover:text-red-400 bg-red-950/20 transition"
             >
               Clear
             </button>
@@ -301,7 +323,7 @@ function Header({
               onClick={
                 filter === "all" ? onSelectAll : onSelectAllVisible
               }
-              className="px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-gold hover:text-gold transition"
+              className="px-3 py-1.5 text-xs uppercase tracking-wider font-extrabold rounded-full border border-pink-500/30 hover:border-pink-400 hover:text-pink-300 bg-pink-950/20 transition"
             >
               Select{" "}
               {filter === "all" ? "all" : "visible"}
@@ -310,7 +332,7 @@ function Header({
 
           <button
             onClick={onLogout}
-            className="hidden sm:inline px-3 py-1.5 text-xs uppercase tracking-wider rounded-full text-cream/40 hover:text-cream transition"
+            className="hidden sm:inline px-3 py-1.5 text-xs uppercase tracking-wider font-bold rounded-full text-white/40 hover:text-white transition"
             aria-label="Log out"
           >
             Logout
@@ -331,6 +353,7 @@ type ActionBarProps = {
   compact: boolean;
   onDownloadSelected: () => void;
   onDownloadAll: () => void;
+  onStartSlideshow: () => void;
 };
 
 function ActionBar({
@@ -340,24 +363,38 @@ function ActionBar({
   busy,
   onDownloadSelected,
   onDownloadAll,
+  onStartSlideshow,
 }: ActionBarProps) {
+  const slideshowLabel =
+    selectedCount > 0
+      ? `▶ Slidih show (${selectedCount})`
+      : "▶ Slidih show all";
   return (
     <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
-      <div className="bg-gradient-to-t from-ink via-ink/95 to-transparent pt-12 pb-4 px-3 sm:px-6">
+      <div
+        className="bg-gradient-to-t from-black via-black/95 to-transparent pt-12 pb-4 px-3 sm:px-6"
+        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="max-w-3xl mx-auto pointer-events-auto">
           {progress && <DownloadProgress progress={progress} />}
+          <button
+            onClick={onStartSlideshow}
+            disabled={busy || totalCount === 0}
+            className="w-full mb-2 sm:mb-3 px-4 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-pink-500 via-pink-600 to-yellow-400 text-black font-extrabold uppercase tracking-wider text-xs sm:text-base transition-all duration-300 hover:brightness-110 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-pink-500/30"
+          >
+            {slideshowLabel}
+          </button>
           <div className="flex gap-2 sm:gap-3">
             <button
               onClick={onDownloadSelected}
               disabled={busy || selectedCount === 0}
-              className="btn-primary flex-1 flex items-center justify-center gap-2"
+              className="btn-primary flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 text-xs sm:text-base"
             >
-              <span>
-                Download {selectedCount === 1 ? "" : "selected"}
-                {selectedCount === 1 && "this one"}
+              <span className="truncate">
+                Download {selectedCount === 1 ? "this" : "selected"}
               </span>
               {selectedCount > 1 && (
-                <span className="inline-flex items-center justify-center bg-ink text-gold rounded-full min-w-6 h-6 px-2 text-xs font-bold">
+                <span className="inline-flex items-center justify-center bg-white text-pink-600 rounded-full min-w-5 sm:min-w-6 h-5 sm:h-6 px-1.5 sm:px-2 text-[10px] sm:text-xs font-black shrink-0">
                   {selectedCount}
                 </span>
               )}
@@ -365,7 +402,7 @@ function ActionBar({
             <button
               onClick={onDownloadAll}
               disabled={busy || totalCount === 0}
-              className="btn-ghost flex-1"
+              className="btn-ghost flex-1 px-3 sm:px-5 text-xs sm:text-base"
             >
               Download all
             </button>
@@ -405,8 +442,8 @@ function FilterEmpty({
       : "All caught up — every picture has been downloaded.";
   return (
     <div className="text-center py-24">
-      <p className="text-cream/60 mb-4">{msg}</p>
-      <button onClick={onReset} className="text-gold underline">
+      <p className="text-white/60 mb-4">{msg}</p>
+      <button onClick={onReset} className="text-pink-400 font-bold hover:text-pink-300 underline">
         Show all pictures
       </button>
     </div>
