@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useTransition, type FormEvent, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 const HINTS = [
   "Hint: Mathew is my d____. 🐶",
   "Hint: Starts with 'd' and ends with 'y'.",
-  "Hint: roof roof roof! Who is your daddy? 🐶🐾",
-  "Hint: Just type 'daddy' bro!",
+  "Hint: roof roof roof... who is he to you? 🐶🐾",
+  "Hint: come on baby boy, you know this one. 🐾",
 ];
 
 export default function PasswordGate() {
@@ -19,7 +18,6 @@ export default function PasswordGate() {
   const [isListening, setIsListening] = useState(false);
   const [speechFeedback, setSpeechFeedback] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
-  const router = useRouter();
   const recognitionRef = useRef<any>(null);
   const matchedRef = useRef<boolean>(false);
   const userStoppedRef = useRef<boolean>(false);
@@ -112,6 +110,7 @@ export default function PasswordGate() {
         };
 
         recognition.onresult = (event: any) => {
+          if (matchedRef.current) return; // already matched — ignore
           const allTranscripts: string[] = [];
           for (let i = 0; i < event.results.length; i++) {
             const res = event.results[i];
@@ -121,7 +120,6 @@ export default function PasswordGate() {
           }
           console.log("Transcripts heard:", allTranscripts);
 
-          // Show what we're hearing live
           const latest = allTranscripts[allTranscripts.length - 1];
           if (latest) {
             setSpeechFeedback(`Heard: "${latest}" 👂`);
@@ -133,9 +131,16 @@ export default function PasswordGate() {
             setSpeechFeedback("Recognized! Logging in... 🎉");
             setValue("daddy");
             try {
+              recognition.abort();
+            } catch {}
+            try {
               recognition.stop();
             } catch {}
-            triggerAutoLogin("daddy");
+            // Defer to next tick so the mic fully releases on mobile Safari
+            // BEFORE we kick off the network request + navigation. Without
+            // this, iOS Safari can drop the fetch when the audio context tears
+            // down mid-flight.
+            setTimeout(() => triggerAutoLogin("daddy"), 50);
           }
         };
 
@@ -149,21 +154,35 @@ export default function PasswordGate() {
     };
   }, []);
 
-  function triggerAutoLogin(passwordToUse: string) {
-    startTransition(async () => {
+  async function triggerAutoLogin(passwordToUse: string) {
+    setSpeechFeedback("Unlocking... 🔓");
+    try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer: passwordToUse }),
+        // Make sure the Set-Cookie response is honored on mobile Safari
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (res.ok) {
-        router.push("/landing");
+        setSpeechFeedback("In! Welcome 🎉");
+        // Hard navigation so the just-set auth cookie is definitely sent on
+        // the next request. router.push() can occasionally race the cookie on
+        // mobile Safari and bounce the user right back to the login page.
+        window.location.assign("/landing");
       } else {
+        matchedRef.current = false; // allow retry
         setAttempts((a) => a + 1);
         setError("baby boy you forgot who i am to you");
+        setSpeechFeedback("Hmm, try again 🐶");
         setValue("");
       }
-    });
+    } catch (err) {
+      console.error("Auto-login failed", err);
+      matchedRef.current = false;
+      setSpeechFeedback("Network hiccup. Tap Enter manually 👇");
+    }
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -175,9 +194,11 @@ export default function PasswordGate() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer }),
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (res.ok) {
-        router.push("/landing");
+        window.location.assign("/landing");
       } else {
         setAttempts((a) => a + 1);
         setError("baby boy you forgot who i am to you");
