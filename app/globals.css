@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0a0a;
+  color: #f7f3ec;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbars in lightbox */
+.no-scroll {
+  overflow: hidden;
+}
+
+/* Image fade-in once loaded */
+.img-fade {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.img-fade.loaded {
+  opacity: 1;
+}
+
+/* Pretty checkbox */
+.pick-check {
+  @apply absolute top-2 left-2 h-7 w-7 rounded-full border-2 border-white/80 bg-black/30 backdrop-blur flex items-center justify-center text-white text-sm font-bold transition-all;
+}
+.pick-check.on {
+  @apply bg-gold border-gold text-ink;
+}

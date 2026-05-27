@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+
+# Production
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Original photos (never commit these)
+113D3500/
+photos-original/
+photos-compressed/
+photos-thumbs/
+
+# OS
+.DS_Store
+*.pem
+.idea/
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vercel
+.vercel
+
+# Upload script log
+upload.log
