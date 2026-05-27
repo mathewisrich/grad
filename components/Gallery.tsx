@@ -1,212 +1,382 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+} from "react";
 import Link from "next/link";
 import Lightbox from "./Lightbox";
+import PhotoTile from "./PhotoTile";
+import DownloadProgress from "./DownloadProgress";
 import { downloadSingle, downloadZip } from "@/lib/download";
+import {
+  usePersistedSelection,
+  useDownloadedSet,
+  useMediaQuery,
+} from "@/lib/hooks";
+import type { ClientPhoto, ZipProgress } from "@/lib/types";
 
-export type ClientPhoto = {
-  name: string;
-  full: string;
-  thumb: string;
-  width?: number;
-  height?: number;
-};
+type SortMode = "name-asc" | "name-desc";
+type ViewFilter = "all" | "selected" | "undownloaded";
 
 export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { selected, toggle, selectMany, clear, hydrated } =
+    usePersistedSelection();
+  const downloaded = useDownloadedSet();
+
+  const [sort, setSort] = useState<SortMode>("name-asc");
+  const [filter, setFilter] = useState<ViewFilter>("all");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [progress, setProgress] = useState<{
-    label: string;
-    done: number;
-    total: number;
-  } | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<ZipProgress | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const toggle = useCallback((name: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }, []);
+  const isSmall = useMediaQuery("(max-width: 640px)");
 
-  const selectAll = () => setSelected(new Set(photos.map((p) => p.name)));
-  const clearAll = () => setSelected(new Set());
+  // --- derived views -------------------------------------------------
+
+  const visible = useMemo<ClientPhoto[]>(() => {
+    let arr = photos;
+    if (filter === "selected") arr = arr.filter((p) => selected.has(p.name));
+    else if (filter === "undownloaded")
+      arr = arr.filter((p) => !downloaded.has(p.name));
+    const sorted = [...arr].sort((a, b) =>
+      sort === "name-asc"
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name)
+    );
+    return sorted;
+  }, [photos, filter, sort, selected, downloaded]);
 
   const selectedPhotos = useMemo(
     () => photos.filter((p) => selected.has(p.name)),
     [photos, selected]
   );
 
+  // --- actions -------------------------------------------------------
+
+  const handleSelectAll = useCallback(() => {
+    selectMany(photos.map((p) => p.name));
+  }, [photos, selectMany]);
+
+  const handleSelectAllVisible = useCallback(() => {
+    selectMany(visible.map((p) => p.name));
+  }, [visible, selectMany]);
+
   async function handleDownloadSelected() {
     if (selectedPhotos.length === 0) return;
     if (selectedPhotos.length === 1) {
-      await downloadSingle(selectedPhotos[0]);
+      setBusy(true);
+      try {
+        await downloadSingle(selectedPhotos[0]);
+      } finally {
+        setBusy(false);
+      }
       return;
     }
-    setDownloading(true);
+    setBusy(true);
     try {
-      await downloadZip(selectedPhotos, "kelly-grad-selected.zip", (d, t) =>
-        setProgress({ label: "Zipping selected", done: d, total: t })
+      await downloadZip(
+        selectedPhotos,
+        `kelly-grad-${selectedPhotos.length}-pics.zip`,
+        setProgress
       );
     } finally {
       setProgress(null);
-      setDownloading(false);
+      setBusy(false);
     }
   }
 
   async function handleDownloadAll() {
-    setDownloading(true);
+    setBusy(true);
     try {
-      await downloadZip(photos, "kelly-grad-all.zip", (d, t) =>
-        setProgress({ label: "Zipping all", done: d, total: t })
-      );
+      await downloadZip(photos, "kelly-grad-all.zip", setProgress);
     } finally {
       setProgress(null);
-      setDownloading(false);
+      setBusy(false);
     }
   }
 
-  // keyboard arrows for lightbox
+  async function handleLogout() {
+    await fetch("/api/auth", { method: "DELETE" });
+    window.location.href = "/";
+  }
+
+  // --- keyboard ------------------------------------------------------
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (lightboxIndex === null) return;
       if (e.key === "Escape") setLightboxIndex(null);
       if (e.key === "ArrowRight")
         setLightboxIndex((i) =>
-          i === null ? null : Math.min(photos.length - 1, i + 1)
+          i === null ? null : Math.min(visible.length - 1, i + 1)
         );
       if (e.key === "ArrowLeft")
         setLightboxIndex((i) => (i === null ? null : Math.max(0, i - 1)));
+      if (e.key === " ") {
+        e.preventDefault();
+        if (lightboxIndex !== null && visible[lightboxIndex])
+          toggle(visible[lightboxIndex].name);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxIndex, photos.length]);
+  }, [lightboxIndex, visible, toggle]);
+
+  // --- render --------------------------------------------------------
 
   return (
-    <main className="min-h-screen pb-32">
-      <header className="sticky top-0 z-30 backdrop-blur bg-ink/80 border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
-          <Link
-            href="/landing"
-            className="text-xs uppercase tracking-widest text-cream/60 hover:text-gold transition"
-          >
-            ← Back
-          </Link>
-          <h1 className="text-sm sm:text-base font-bold flex-1">
-            {photos.length} pictures · {selected.size} selected
-          </h1>
-          <button
-            onClick={selectAll}
-            className="hidden sm:inline px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-gold hover:text-gold transition"
-          >
-            Select all
-          </button>
-          {selected.size > 0 && (
-            <button
-              onClick={clearAll}
-              className="px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-red-400 hover:text-red-400 transition"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      </header>
+    <main className="min-h-screen pb-44">
+      <Header
+        total={photos.length}
+        visibleCount={visible.length}
+        selectedCount={selected.size}
+        downloadedCount={downloaded.size}
+        filter={filter}
+        sort={sort}
+        onFilterChange={setFilter}
+        onSortChange={setSort}
+        onSelectAll={handleSelectAll}
+        onSelectAllVisible={handleSelectAllVisible}
+        onClear={clear}
+        onLogout={handleLogout}
+      />
 
       {photos.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-            {photos.map((p, i) => {
-              const on = selected.has(p.name);
-              return (
-                <div
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4">
+          {visible.length === 0 ? (
+            <FilterEmpty
+              filter={filter}
+              onReset={() => setFilter("all")}
+            />
+          ) : (
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+              {visible.map((p, i) => (
+                <PhotoTile
                   key={p.name}
-                  className={`relative group aspect-square overflow-hidden rounded-xl bg-white/5 cursor-pointer transition ring-offset-2 ring-offset-ink ${
-                    on ? "ring-2 ring-gold" : "ring-0"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={p.thumb}
-                    alt={p.name}
-                    loading="lazy"
-                    decoding="async"
-                    onClick={() => setLightboxIndex(i)}
-                    className="absolute inset-0 w-full h-full object-cover transition group-hover:scale-[1.03]"
-                  />
-                  <button
-                    aria-label={on ? "Unselect" : "Select"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggle(p.name);
-                    }}
-                    className={`pick-check ${on ? "on" : ""}`}
-                  >
-                    {on ? "✓" : ""}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                  photo={p}
+                  index={i}
+                  selected={selected.has(p.name)}
+                  downloaded={downloaded.has(p.name)}
+                  hydrated={hydrated}
+                  onOpen={() => setLightboxIndex(i)}
+                  onToggle={() => toggle(p.name)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Action bar */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-ink via-ink/95 to-ink/0 pt-10 pb-5 px-4 pointer-events-none">
-        <div className="max-w-3xl mx-auto pointer-events-auto">
-          {progress && (
-            <div className="mb-3 px-4 py-2 rounded-full bg-white/10 border border-white/10 text-sm text-center">
-              {progress.label} · {progress.done} / {progress.total}
-            </div>
+      <ActionBar
+        selectedCount={selected.size}
+        totalCount=
+          {photos.length}
+        progress={progress}
+        busy={busy}
+        compact={isSmall}
+        onDownloadSelected={handleDownloadSelected}
+        onDownloadAll={handleDownloadAll}
+      />
+
+      {lightboxIndex !== null && visible[lightboxIndex] && (
+        <Lightbox
+          photo={visible[lightboxIndex]}
+          index={lightboxIndex}
+          total={visible.length}
+          isSelected={selected.has(visible[lightboxIndex].name)}
+          isDownloaded={downloaded.has(visible[lightboxIndex].name)}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
+          onNext={() =>
+            setLightboxIndex((i) =>
+              Math.min(visible.length - 1, (i ?? 0) + 1)
+            )
+          }
+          onToggleSelect={() => toggle(visible[lightboxIndex].name)}
+          onDownload={() => downloadSingle(visible[lightboxIndex])}
+        />
+      )}
+    </main>
+  );
+}
+
+// --- header ---------------------------------------------------------
+
+type HeaderProps = {
+  total: number;
+  visibleCount: number;
+  selectedCount: number;
+  downloadedCount: number;
+  filter: ViewFilter;
+  sort: SortMode;
+  onFilterChange: (f: ViewFilter) => void;
+  onSortChange: (s: SortMode) => void;
+  onSelectAll: () => void;
+  onSelectAllVisible: () => void;
+  onClear: () => void;
+  onLogout: () => void;
+};
+
+function Header({
+  total,
+  visibleCount,
+  selectedCount,
+  downloadedCount,
+  filter,
+  sort,
+  onFilterChange,
+  onSortChange,
+  onSelectAll,
+  onSelectAllVisible,
+  onClear,
+  onLogout,
+}: HeaderProps) {
+  return (
+    <header className="sticky top-0 z-30 backdrop-blur-xl bg-ink/85 border-b border-white/10">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+          <Link
+            href="/landing"
+            className="text-xs uppercase tracking-widest text-cream/60 hover:text-gold transition shrink-0"
+          >
+            ←
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm sm:text-base font-bold truncate">
+              {visibleCount} of {total}{" "}
+              <span className="text-cream/40 font-normal">·</span>{" "}
+              <span className="text-gold">{selectedCount}</span> selected
+              {downloadedCount > 0 && (
+                <>
+                  {" "}
+                  <span className="text-cream/40 font-normal">·</span>{" "}
+                  <span className="text-cream/60 font-normal">
+                    {downloadedCount} downloaded
+                  </span>
+                </>
+              )}
+            </h1>
+          </div>
+
+          <select
+            value={filter}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              onFilterChange(e.target.value as ViewFilter)
+            }
+            className="bg-white/5 border border-white/15 rounded-full px-3 py-1.5 text-xs uppercase tracking-wider hover:border-gold transition cursor-pointer"
+            aria-label="Filter photos"
+          >
+            <option value="all">All</option>
+            <option value="selected">Selected</option>
+            <option value="undownloaded">Not downloaded</option>
+          </select>
+
+          <select
+            value={sort}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              onSortChange(e.target.value as SortMode)
+            }
+            className="hidden sm:block bg-white/5 border border-white/15 rounded-full px-3 py-1.5 text-xs uppercase tracking-wider hover:border-gold transition cursor-pointer"
+            aria-label="Sort order"
+          >
+            <option value="name-asc">A → Z</option>
+            <option value="name-desc">Z → A</option>
+          </select>
+
+          {selectedCount > 0 ? (
+            <button
+              onClick={onClear}
+              className="px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-red-400 hover:text-red-400 transition"
+            >
+              Clear
+            </button>
+          ) : (
+            <button
+              onClick={
+                filter === "all" ? onSelectAll : onSelectAllVisible
+              }
+              className="px-3 py-1.5 text-xs uppercase tracking-wider rounded-full border border-white/20 hover:border-gold hover:text-gold transition"
+            >
+              Select{" "}
+              {filter === "all" ? "all" : "visible"}
+            </button>
           )}
+
+          <button
+            onClick={onLogout}
+            className="hidden sm:inline px-3 py-1.5 text-xs uppercase tracking-wider rounded-full text-cream/40 hover:text-cream transition"
+            aria-label="Log out"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// --- bottom action bar ---------------------------------------------
+
+type ActionBarProps = {
+  selectedCount: number;
+  totalCount: number;
+  progress: ZipProgress | null;
+  busy: boolean;
+  compact: boolean;
+  onDownloadSelected: () => void;
+  onDownloadAll: () => void;
+};
+
+function ActionBar({
+  selectedCount,
+  totalCount,
+  progress,
+  busy,
+  onDownloadSelected,
+  onDownloadAll,
+}: ActionBarProps) {
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
+      <div className="bg-gradient-to-t from-ink via-ink/95 to-transparent pt-12 pb-4 px-3 sm:px-6">
+        <div className="max-w-3xl mx-auto pointer-events-auto">
+          {progress && <DownloadProgress progress={progress} />}
           <div className="flex gap-2 sm:gap-3">
             <button
-              onClick={handleDownloadSelected}
-              disabled={downloading || selected.size === 0}
-              className="flex-1 py-3 sm:py-4 rounded-2xl bg-gold text-ink font-bold uppercase tracking-wider text-sm sm:text-base hover:brightness-110 active:scale-[0.99] transition disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={onDownloadSelected}
+              disabled={busy || selectedCount === 0}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
-              Download selected
-              {selected.size > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center bg-ink text-gold rounded-full w-6 h-6 text-xs">
-                  {selected.size}
+              <span>
+                Download {selectedCount === 1 ? "" : "selected"}
+                {selectedCount === 1 && "this one"}
+              </span>
+              {selectedCount > 1 && (
+                <span className="inline-flex items-center justify-center bg-ink text-gold rounded-full min-w-6 h-6 px-2 text-xs font-bold">
+                  {selectedCount}
                 </span>
               )}
             </button>
             <button
-              onClick={handleDownloadAll}
-              disabled={downloading || photos.length === 0}
-              className="flex-1 py-3 sm:py-4 rounded-2xl border-2 border-gold text-gold font-bold uppercase tracking-wider text-sm sm:text-base hover:bg-gold/10 active:scale-[0.99] transition disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={onDownloadAll}
+              disabled={busy || totalCount === 0}
+              className="btn-ghost flex-1"
             >
               Download all
             </button>
           </div>
         </div>
       </div>
-
-      {lightboxIndex !== null && photos[lightboxIndex] && (
-        <Lightbox
-          photo={photos[lightboxIndex]}
-          index={lightboxIndex}
-          total={photos.length}
-          isSelected={selected.has(photos[lightboxIndex].name)}
-          onClose={() => setLightboxIndex(null)}
-          onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
-          onNext={() =>
-            setLightboxIndex((i) =>
-              Math.min(photos.length - 1, (i ?? 0) + 1)
-            )
-          }
-          onToggleSelect={() => toggle(photos[lightboxIndex].name)}
-          onDownload={() => downloadSingle(photos[lightboxIndex])}
-        />
-      )}
-    </main>
+    </div>
   );
 }
+
+// --- empty states --------------------------------------------------
 
 function EmptyState() {
   return (
@@ -218,6 +388,27 @@ function EmptyState() {
       <pre className="mt-4 text-left bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-gold overflow-x-auto">
         npm run upload
       </pre>
+    </div>
+  );
+}
+
+function FilterEmpty({
+  filter,
+  onReset,
+}: {
+  filter: ViewFilter;
+  onReset: () => void;
+}) {
+  const msg =
+    filter === "selected"
+      ? "Nothing selected yet."
+      : "All caught up — every picture has been downloaded.";
+  return (
+    <div className="text-center py-24">
+      <p className="text-cream/60 mb-4">{msg}</p>
+      <button onClick={onReset} className="text-gold underline">
+        Show all pictures
+      </button>
     </div>
   );
 }

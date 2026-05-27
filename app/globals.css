@@ -4,6 +4,11 @@
 
 :root {
   color-scheme: dark;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -12,26 +17,128 @@ body {
   color: #f7f3ec;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Hide scrollbars in lightbox */
-.no-scroll {
+body.no-scroll {
   overflow: hidden;
 }
 
-/* Image fade-in once loaded */
+/* --- noise / grain overlay for richer dark backgrounds ---------------- */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* --- thin scrollbar in dark theme ------------------------------------ */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* --- selection check circle ------------------------------------------ */
+.pick-check {
+  @apply absolute top-2 left-2 h-7 w-7 rounded-full border-2 border-white/70 bg-black/40 backdrop-blur-sm flex items-center justify-center text-white text-sm font-bold transition-all duration-200;
+  transform: translateZ(0);
+}
+.pick-check.on {
+  @apply bg-gold border-gold text-ink;
+  box-shadow: 0 0 0 4px rgba(201, 162, 74, 0.18);
+}
+.pick-check:active {
+  transform: scale(0.92);
+}
+
+/* --- nice button base ------------------------------------------------ */
+.btn-primary {
+  @apply px-5 py-3 rounded-2xl bg-gold text-ink font-bold uppercase tracking-wider text-sm sm:text-base transition;
+  box-shadow: 0 8px 20px -8px rgba(201, 162, 74, 0.6);
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.btn-ghost {
+  @apply px-5 py-3 rounded-2xl border-2 border-gold/70 text-gold font-bold uppercase tracking-wider text-sm sm:text-base transition;
+}
+.btn-ghost:hover {
+  @apply bg-gold/10 border-gold;
+}
+.btn-ghost:active {
+  transform: scale(0.98);
+}
+.btn-ghost:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- shimmer skeleton ------------------------------------------------ */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* --- image fade-in --------------------------------------------------- */
 .img-fade {
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.45s var(--ease-out-quart);
 }
 .img-fade.loaded {
   opacity: 1;
 }
 
-/* Pretty checkbox */
-.pick-check {
-  @apply absolute top-2 left-2 h-7 w-7 rounded-full border-2 border-white/80 bg-black/30 backdrop-blur flex items-center justify-center text-white text-sm font-bold transition-all;
+/* --- progress bar ---------------------------------------------------- */
+.bar {
+  @apply h-1.5 w-full rounded-full bg-white/10 overflow-hidden;
 }
-.pick-check.on {
-  @apply bg-gold border-gold text-ink;
+.bar > span {
+  @apply block h-full bg-gold transition-all duration-200;
+}
+
+/* --- focus ring ------------------------------------------------------ */
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid #c9a24a;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* --- prevent iOS zoom on input focus --------------------------------- */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
