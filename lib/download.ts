@@ -6,11 +6,14 @@ import type { DownloadablePhoto, ZipProgress } from "./types";
 const FETCH_CONCURRENCY = 6;
 const FETCH_RETRIES = 2;
 
-export async function downloadSingle(photo: DownloadablePhoto): Promise<void> {
+export async function downloadSingle(
+  photo: DownloadablePhoto,
+  namespace = "kg"
+): Promise<void> {
   try {
     const blob = await fetchBlob(photo.full);
     triggerBlobDownload(blob, `${photo.name}.jpg`);
-    markDownloaded([photo.name]);
+    markDownloaded([photo.name], namespace);
   } catch (err) {
     console.warn("Single download fell back to new-tab:", err);
     window.open(photo.full, "_blank", "noopener,noreferrer");
@@ -20,7 +23,8 @@ export async function downloadSingle(photo: DownloadablePhoto): Promise<void> {
 export async function downloadZip(
   photos: DownloadablePhoto[],
   filename: string,
-  onProgress?: (p: ZipProgress) => void
+  onProgress?: (p: ZipProgress) => void,
+  namespace = "kg"
 ): Promise<void> {
   if (photos.length === 0) return;
 
@@ -66,7 +70,7 @@ export async function downloadZip(
   );
 
   triggerBlobDownload(blob, filename);
-  markDownloaded(succeeded);
+  markDownloaded(succeeded, namespace);
   emit("done", fetched, 100);
 }
 
@@ -115,14 +119,16 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   }, 100);
 }
 
-// --- "downloaded" memory (so Kelly can see what he already grabbed) -------
+// --- "downloaded" memory (so the viewer can see what they already grabbed) -
 
-const DOWNLOADED_KEY = "kg.downloaded.v1";
+const downloadedKey = (namespace: string) => `${namespace}.downloaded.v1`;
+export const downloadedEventName = (namespace: string) =>
+  `${namespace}:downloaded-changed`;
 
-export function getDownloadedSet(): Set<string> {
+export function getDownloadedSet(namespace = "kg"): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(DOWNLOADED_KEY);
+    const raw = window.localStorage.getItem(downloadedKey(namespace));
     if (!raw) return new Set();
     const arr = JSON.parse(raw) as string[];
     return new Set(arr);
@@ -131,26 +137,26 @@ export function getDownloadedSet(): Set<string> {
   }
 }
 
-export function markDownloaded(names: string[]): void {
+export function markDownloaded(names: string[], namespace = "kg"): void {
   if (typeof window === "undefined" || names.length === 0) return;
   try {
-    const set = getDownloadedSet();
+    const set = getDownloadedSet(namespace);
     for (const n of names) set.add(n);
     window.localStorage.setItem(
-      DOWNLOADED_KEY,
+      downloadedKey(namespace),
       JSON.stringify(Array.from(set))
     );
-    window.dispatchEvent(new CustomEvent("kg:downloaded-changed"));
+    window.dispatchEvent(new CustomEvent(downloadedEventName(namespace)));
   } catch {
     // localStorage may be full / disabled — non-fatal
   }
 }
 
-export function clearDownloadedMemory(): void {
+export function clearDownloadedMemory(namespace = "kg"): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(DOWNLOADED_KEY);
-    window.dispatchEvent(new CustomEvent("kg:downloaded-changed"));
+    window.localStorage.removeItem(downloadedKey(namespace));
+    window.dispatchEvent(new CustomEvent(downloadedEventName(namespace)));
   } catch {
     // ignore
   }

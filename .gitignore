@@ -38,5 +38,7 @@ yarn-error.log*
 # Vercel
 .vercel
 
-# Upload script log
+# Upload script logs
 upload.log
+upload-mn.log
+dev.log

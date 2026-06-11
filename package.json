@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "upload": "node scripts/upload-to-r2.mjs",
+    "upload:mn": "node scripts/upload-mn-to-r2.mjs",
     "manifest": "node scripts/generate-manifest.mjs"
   },
   "dependencies": {

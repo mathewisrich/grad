@@ -22,10 +22,41 @@ import type { ClientPhoto, ZipProgress } from "@/lib/types";
 type SortMode = "name-asc" | "name-desc";
 type ViewFilter = "all" | "selected" | "undownloaded";
 
-export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
+export type GalleryConfig = {
+  /** Storage namespace so different galleries don't share selections */
+  namespace: string;
+  /** Filename for "download all" zip */
+  zipAllName: string;
+  /** Prefix for "download selected" zip filename */
+  zipSelectedPrefix: string;
+  /** Where the "Back" link points; null hides it */
+  backHref: string | null;
+  /** Endpoint to DELETE for logout */
+  logoutEndpoint: string;
+  /** Where to send the user after logout */
+  homeHref: string;
+};
+
+const DEFAULT_CONFIG: GalleryConfig = {
+  namespace: "kg",
+  zipAllName: "kelly-grad-all.zip",
+  zipSelectedPrefix: "kelly-grad",
+  backHref: "/landing",
+  logoutEndpoint: "/api/auth",
+  homeHref: "/",
+};
+
+export default function Gallery({
+  photos,
+  config,
+}: {
+  photos: ClientPhoto[];
+  config?: Partial<GalleryConfig>;
+}) {
+  const cfg: GalleryConfig = { ...DEFAULT_CONFIG, ...config };
   const { selected, toggle, selectMany, clear, hydrated } =
-    usePersistedSelection();
-  const downloaded = useDownloadedSet();
+    usePersistedSelection(cfg.namespace);
+  const downloaded = useDownloadedSet(cfg.namespace);
 
   const [sort, setSort] = useState<SortMode>("name-asc");
   const [filter, setFilter] = useState<ViewFilter>("all");
@@ -71,7 +102,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
     if (selectedPhotos.length === 1) {
       setBusy(true);
       try {
-        await downloadSingle(selectedPhotos[0]);
+        await downloadSingle(selectedPhotos[0], cfg.namespace);
       } finally {
         setBusy(false);
       }
@@ -81,8 +112,9 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
     try {
       await downloadZip(
         selectedPhotos,
-        `kelly-grad-${selectedPhotos.length}-pics.zip`,
-        setProgress
+        `${cfg.zipSelectedPrefix}-${selectedPhotos.length}-pics.zip`,
+        setProgress,
+        cfg.namespace
       );
     } finally {
       setProgress(null);
@@ -93,7 +125,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
   async function handleDownloadAll() {
     setBusy(true);
     try {
-      await downloadZip(photos, "kelly-grad-all.zip", setProgress);
+      await downloadZip(photos, cfg.zipAllName, setProgress, cfg.namespace);
     } finally {
       setProgress(null);
       setBusy(false);
@@ -101,8 +133,8 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
   }
 
   async function handleLogout() {
-    await fetch("/api/auth", { method: "DELETE" });
-    window.location.href = "/";
+    await fetch(cfg.logoutEndpoint, { method: "DELETE" });
+    window.location.href = cfg.homeHref;
   }
 
   function handleStartSlideshow() {
@@ -147,6 +179,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
         downloadedCount={downloaded.size}
         filter={filter}
         sort={sort}
+        backHref={cfg.backHref}
         onFilterChange={setFilter}
         onSortChange={setSort}
         onSelectAll={handleSelectAll}
@@ -221,7 +254,7 @@ export default function Gallery({ photos }: { photos: ClientPhoto[] }) {
             )
           }
           onToggleSelect={() => toggle(visible[lightboxIndex].name)}
-          onDownload={() => downloadSingle(visible[lightboxIndex])}
+          onDownload={() => downloadSingle(visible[lightboxIndex], cfg.namespace)}
         />
       )}
     </main>
@@ -237,6 +270,7 @@ type HeaderProps = {
   downloadedCount: number;
   filter: ViewFilter;
   sort: SortMode;
+  backHref: string | null;
   onFilterChange: (f: ViewFilter) => void;
   onSortChange: (s: SortMode) => void;
   onSelectAll: () => void;
@@ -252,6 +286,7 @@ function Header({
   downloadedCount,
   filter,
   sort,
+  backHref,
   onFilterChange,
   onSortChange,
   onSelectAll,
@@ -263,12 +298,14 @@ function Header({
     <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/85 border-b border-pink-500/10">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <Link
-            href="/landing"
-            className="text-xs uppercase tracking-widest text-pink-400 hover:text-pink-300 font-extrabold transition shrink-0"
-          >
-            ← Back
-          </Link>
+          {backHref && (
+            <Link
+              href={backHref}
+              className="text-xs uppercase tracking-widest text-pink-400 hover:text-pink-300 font-extrabold transition shrink-0"
+            >
+              ← Back
+            </Link>
+          )}
           <div className="flex-1 min-w-0">
             <h1 className="text-sm sm:text-base font-bold truncate">
               {visibleCount} of {total}{" "}

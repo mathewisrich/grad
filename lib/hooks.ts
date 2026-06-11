@@ -1,32 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getDownloadedSet } from "./download";
+import { getDownloadedSet, downloadedEventName } from "./download";
 
-const SELECTION_KEY = "kg.selection.v1";
+const selectionKey = (namespace: string) => `${namespace}.selection.v1`;
 
-export function usePersistedSelection() {
+export function usePersistedSelection(namespace = "kg") {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(SELECTION_KEY);
+      const raw = sessionStorage.getItem(selectionKey(namespace));
       if (raw) setSelected(new Set(JSON.parse(raw) as string[]));
     } catch {
       // ignore
     }
     setHydrated(true);
-  }, []);
+  }, [namespace]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(SELECTION_KEY, JSON.stringify([...selected]));
+      sessionStorage.setItem(
+        selectionKey(namespace),
+        JSON.stringify([...selected])
+      );
     } catch {
       // ignore
     }
-  }, [selected, hydrated]);
+  }, [selected, hydrated, namespace]);
 
   const toggle = useCallback((name: string) => {
     setSelected((prev) => {
@@ -46,19 +49,20 @@ export function usePersistedSelection() {
   return { selected, toggle, selectMany, clear, hydrated };
 }
 
-export function useDownloadedSet(): Set<string> {
+export function useDownloadedSet(namespace = "kg"): Set<string> {
   const [set, setSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setSet(getDownloadedSet());
-    const onChange = () => setSet(getDownloadedSet());
-    window.addEventListener("kg:downloaded-changed", onChange);
+    const evt = downloadedEventName(namespace);
+    setSet(getDownloadedSet(namespace));
+    const onChange = () => setSet(getDownloadedSet(namespace));
+    window.addEventListener(evt, onChange);
     window.addEventListener("storage", onChange);
     return () => {
-      window.removeEventListener("kg:downloaded-changed", onChange);
+      window.removeEventListener(evt, onChange);
       window.removeEventListener("storage", onChange);
     };
-  }, []);
+  }, [namespace]);
 
   return set;
 }
